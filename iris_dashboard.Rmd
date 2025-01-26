@@ -1,0 +1,202 @@
+---
+title: "Iris Dataset Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    source_code: embed
+    #Possible themes: default
+                    # simplex
+                    # flatly
+                    # cosmo
+                    # journal
+                    # spacelab
+                    # united
+    theme: flatly
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# Load data in 'global' chunk so it can be shared by all users of the dashboard
+library(datasets)
+library(shiny)
+library(plotly)
+library(class)  
+data(iris)
+```
+
+
+
+K-Means and Bar Plot
+=====================================================================
+Column {.sidebar}
+--------------------------------------------------------
+
+```{r}
+# Sidebar input controls
+selectInput('xcol', 'X Variable', names(iris),
+            selected = names(iris)[1])
+
+selectInput('ycol', 'Y Variable', names(iris),
+            selected = names(iris)[2])
+
+# Label to inform the user that the number of clusters is fixed
+h4("Number of Clusters: 3 (for all species)")
+```
+
+Column
+-------------------------------------------------------------
+
+### K Means Clustering Dashboard
+
+```{r}
+# Reactive expression to combine selected variables
+selectedData <- reactive({
+  iris[, c(input$xcol, input$ycol)]
+})
+
+# Reactive expression to compute K-means clustering with fixed 3 clusters
+clusters <- reactive({
+  kmeans(selectedData(), centers = 3)
+})
+
+# Render the main scatter plot with cluster colors and species labels
+renderPlotly({
+  data <- selectedData()
+  data$Cluster <- as.factor(clusters()$cluster)
+  data$Species <- iris$Species
+
+  # Map cluster numbers to species names for consistent legend labels
+  cluster_mapping <- c("1" = "Setosa", "2" = "Versicolor", "3" = "Virginica")
+  cluster_colors <- c("Setosa" = "#E41A1C", "Versicolor" = "#377EB8", "Virginica" = "#4DAF4A")
+
+  data$Cluster <- factor(data$Cluster, levels = names(cluster_mapping), labels = cluster_mapping)
+
+  plot_ly(data, x = ~data[[input$xcol]], y = ~data[[input$ycol]], 
+          color = ~Cluster, text = ~paste("Actual Species:", Species, 
+                                          "<br>Assigned Cluster:", Cluster), 
+          type = 'scatter', mode = 'markers', marker = list(size = 10)) %>%
+    layout(title = "K-Means Clustering Scatter Plot",
+           xaxis = list(title = input$xcol),
+           yaxis = list(title = input$ycol),
+           legend = list(title = list(text = "Species")))
+})
+```
+
+### Bar Chart of Cluster Sizes
+
+```{r}
+# Bar chart showing the number of points per cluster
+renderPlotly({
+  cluster_counts <- table(clusters()$cluster)
+
+  # Map cluster numbers to species names for consistent legend labels
+  cluster_mapping <- c("1" = "Setosa", "2" = "Versicolor", "3" = "Virginica")
+  cluster_colors <- c("Setosa" = "#00AFB1", "Versicolor" = "#FFB341", "Virginica" = "#A7A1D1")
+  names(cluster_counts) <- cluster_mapping[names(cluster_counts)]
+
+  plot_ly(x = ~names(cluster_counts), y = ~as.numeric(cluster_counts), 
+          type = 'bar', marker = list(color = unname(cluster_colors[names(cluster_counts)]))) %>%
+    layout(title = "Cluster Size", 
+           xaxis = list(title = "Species"),
+           yaxis = list(title = "Count"))
+})
+```
+
+Scatter Plot
+=======================================================================
+
+### Pairwise Scatter Plots for All Variables
+
+```{r}
+
+# Full-page pairwise scatter plot with consistent color and group legend
+renderPlot({
+  cluster_mapping <- c("1" = "Setosa", "2" = "Versicolor", "3" = "Virginica")
+  cluster_colors <- c("#00AFB1", "#FFB341", "#A7A1D1")
+
+  par(mar = c(4, 4, 4, 4), mfrow = c(1, 1))
+  pairs(
+    iris[1:4], 
+    col = cluster_colors[clusters()$cluster], 
+    pch = 20, 
+    main = "Pairwise Scatter Plots for Iris Dataset"
+  )
+  
+})
+```
+
+
+Density Plot 
+===========================================================
+
+Column {.sidebar}
+-----------------------------------------------------------
+```{r}
+# Sidebar input controls for density plot page
+selectInput('density_var', 'Variable', names(iris),
+            selected = names(iris)[1])
+```
+
+Column
+-------------------------------------------------------------
+### Density Plot
+
+```{r}
+# Density plot for a selected variable
+renderPlotly({
+  plot_ly(x = ~iris[[input$density_var]], type = 'histogram', 
+          marker = list(color = "#08AAA1")) %>%
+    layout(title = paste("Density Plot for", input$density_var),
+           xaxis = list(title = input$density_var),
+           yaxis = list(title = "Density"))
+})
+```
+
+KNN Cluster Prediction
+====================================================================
+
+Column {.sidebar}
+--------------------------------------------
+```{r}
+# Sidebar input controls for KNN prediction page
+numericInput('sepal_length', 'Sepal Length', value = 5.1, min = 4, max = 8, step = 0.1)
+numericInput('sepal_width', 'Sepal Width', value = 3.4, min = 2, max = 5, step = 0.1)
+numericInput('petal_length', 'Petal Length', value = 1.4, min = 1, max = 7, step = 0.1)
+numericInput('petal_width', 'Petal Width', value = 0.2, min = 0.1, max = 2.5, step = 0.1)
+
+actionButton('predict_button', 'Predict Cluster')
+
+```
+
+Column
+--------------------------------------------------------
+### KNN Cluster Prediction Results
+```{r}
+# KNN Prediction Logic
+# Reactive value to store prediction
+prediction <- reactiveVal("")
+
+# Observe button click to trigger prediction
+observeEvent(input$predict_button, {
+  # Create new data for prediction
+  new_data <- data.frame(
+    Sepal.Length = input$sepal_length,
+    Sepal.Width = input$sepal_width,
+    Petal.Length = input$petal_length,
+    Petal.Width = input$petal_width
+  )
+  
+  # Train KNN Model with k=3
+  knn_model <- knn(train = iris[, 1:4], test = new_data, cl = iris$Species, k = 3)
+  
+  # Update the reactive value
+  prediction(as.character(knn_model[1]))
+})
+
+# Render the prediction result
+renderText({
+  paste("Predicted Cluster Group: ", prediction())
+})
+
+```
