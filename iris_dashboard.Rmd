@@ -17,7 +17,6 @@ runtime: shiny
 ---
 
 ```{r global, include=FALSE}
-# Load data in 'global' chunk so it can be shared by all users of the dashboard
 library(datasets)
 library(shiny)
 library(plotly)
@@ -40,7 +39,6 @@ selectInput('xcol', 'X Variable', names(iris),
 selectInput('ycol', 'Y Variable', names(iris),
             selected = names(iris)[2])
 
-# Label to inform the user that the number of clusters is fixed
 h4("Number of Clusters: 3 (for all species)")
 ```
 
